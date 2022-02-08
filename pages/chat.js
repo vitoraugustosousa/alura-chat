@@ -1,43 +1,69 @@
 import { Box, Text, TextField, Image, Button } from "@skynexui/components";
-import React, {useState, useEffect} from "react";
-import { createClient } from '@supabase/supabase-js'
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { createClient } from "@supabase/supabase-js";
 import appConfig from "../config.json";
+import { ButtonSendSticker } from "../src/components/ButtonSendSticker";
 
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTY0Mzc5NTA2MiwiZXhwIjoxOTU5MzcxMDYyfQ.iEjseJK8CulADrU9gFz1ungLdzTTILvRLhjxXXy8cxY';
-const SUPABASE_URL = 'https://lnwytseiwnrbrzgymkil.supabase.co';
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTY0Mzc5NTA2MiwiZXhwIjoxOTU5MzcxMDYyfQ.iEjseJK8CulADrU9gFz1ungLdzTTILvRLhjxXXy8cxY";
+const SUPABASE_URL = "https://lnwytseiwnrbrzgymkil.supabase.co";
 const supaBaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-
-
-
+function listenMessages(addMessage) {
+  return supaBaseClient
+    .from("messages")
+    .on("INSERT", (res) => {
+      addMessage(res.new);
+    })
+    .subscribe();
+}
 
 export default function ChatPage() {
+  const router = useRouter();
+  const loggedUser = router.query.username;
   const [message, setMessage] = useState("");
   const [messagesList, setMessageList] = useState([]);
 
   useEffect(() => {
     supaBaseClient
-        .from('messages')
-        .select('*')
-        .order('id', {ascending: false})
-        .then(({ data }) => {
-            setMessageList(data);
+      .from("messages")
+      .select("*")
+      .order("id", { ascending: false })
+      .then(({ data }) => {
+        setMessageList(data);
+      });
+
+    const subscription = listenMessages((newMessage) => {
+      console.log("New Message: ", newMessage);
+      console.log("Messages List: ", messagesList);
+
+      setMessageList((currentList) => {
+        console.log("Current List value: ", currentList);
+        return [newMessage, ...currentList];
+      });
     });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   function handleNewMessage(newMessage) {
     const message = {
       //id: messagesList.length + 1,
       text: newMessage,
-      from: "vsousa",
+      from: loggedUser,
     };
 
     supaBaseClient
-        .from('messages')
-        .insert([message])
-        .then(({ data }) => {
-            setMessageList([data[0], ...messagesList]);
-        });
+      .from("messages")
+      .insert([message])
+      .then(({ data }) => {
+        console.log("Creating message: ", data);
+        console.log(router.query);
+        setMessageList([data[0], ...messagesList]);
+      });
     setMessage("");
   }
 
@@ -116,6 +142,13 @@ export default function ChatPage() {
                 color: appConfig.theme.colors.neutrals[200],
               }}
             />
+            {/* CallBack */}
+            <ButtonSendSticker
+              onStickerClick={(sticker) => {
+                // console.log('[USANDO O COMPONENTE] Salva esse sticker no banco', sticker);
+                handleNewMessage(":sticker: " + sticker);
+              }}
+            />
           </Box>
         </Box>
       </Box>
@@ -147,8 +180,7 @@ function Header() {
   );
 }
 
-function MessageList({messages}) {
-  
+function MessageList({ messages }) {
   return (
     <Box
       tag="ul"
@@ -162,9 +194,9 @@ function MessageList({messages}) {
         marginBottom: "16px",
       }}
     >
-      {messages.map(message => {
-          return (
-            <Text
+      {messages.map((message) => {
+        return (
+          <Text
             key={message.id}
             tag="li"
             styleSheet={{
@@ -180,8 +212,8 @@ function MessageList({messages}) {
             <Box
               styleSheet={{
                 marginBottom: "8px",
-                display: 'flex',
-                alignItems: 'flex-end',
+                display: "flex",
+                alignItems: "flex-end",
               }}
             >
               <Image
@@ -194,7 +226,9 @@ function MessageList({messages}) {
                 }}
                 src={`https://github.com/${message.from}.png`}
               />
-              <Text styleSheet={{fontSize: "12px"}} tag="strong">{message.from}</Text>
+              <Text styleSheet={{ fontSize: "12px" }} tag="strong">
+                {message.from}
+              </Text>
               <Text
                 styleSheet={{
                   fontSize: "10px",
@@ -206,9 +240,20 @@ function MessageList({messages}) {
                 {new Date().toLocaleDateString()}
               </Text>
             </Box>
-            {message.text}
+            {/* [Declarativo] */}
+            {/* Condicional: {mensagem.texto.startsWith(':sticker:').toString()} */}
+            {message.text.startsWith(":sticker:") ? (
+              <Image src={message.text.replace(":sticker:", "")} />
+            ) : (
+              message.text
+            )}
+            {/* if mensagem de texto possui stickers:
+                           mostra a imagem
+                        else 
+                           mensagem.texto */}
+            {/* {mensagem.texto} */}
           </Text>
-          );
+        );
       })}
     </Box>
   );
